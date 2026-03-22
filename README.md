@@ -82,6 +82,56 @@ npm run tauri build
 4. 通过菜单栏图标颜色查看连接状态
 5. 右键菜单可重启服务或退出应用
 
+### 微信 iLink Bot API
+
+本项目使用微信官方 ClawBot iLink 协议（与 [`@tencent-weixin/openclaw-weixin`](https://www.npmjs.com/package/@tencent-weixin/openclaw-weixin) 相同）与微信通信。
+
+**Base URL:** `https://ilinkai.weixin.qq.com`
+
+**公共请求头:**
+
+| Header | 值 |
+|---|---|
+| `Authorization` | `Bearer <bot_token>` |
+| `AuthorizationType` | `ilink_bot_token` |
+| `X-WECHAT-UIN` | 随机 base64 编码值（防重放） |
+
+**主要接口:**
+
+| 接口 | 说明 |
+|---|---|
+| `ilink/bot/get_bot_qrcode` | 获取登录二维码 |
+| `ilink/bot/get_qrcode_status` | 轮询扫码状态 |
+| `ilink/bot/getupdates` | 长轮询接收消息 |
+| `ilink/bot/sendmessage` | 发送消息 |
+
+**sendmessage 请求体:**
+
+```json
+{
+  "msg": {
+    "to_user_id": "xxx@im.wechat",
+    "message_type": 2,
+    "message_state": 2,
+    "context_token": "<来自收到消息的上下文 token>",
+    "item_list": [
+      { "type": 1, "text_item": { "text": "消息内容" } }
+    ]
+  },
+  "base_info": { "channel_version": "0.1.0" }
+}
+```
+
+**消息内容类型 (`item_list[].type`):**
+
+| type | 说明 |
+|---|---|
+| 1 | 文本 |
+| 2 | 图片 |
+| 3 | 语音 |
+| 4 | 文件 |
+| 5 | 视频 |
+
 ### 许可证
 
 MIT
@@ -165,6 +215,56 @@ npm run tauri build
 3. After login, the window can be closed; the app keeps running in the background
 4. Check connection status via the tray icon color
 5. Right-click the tray icon to restart services or quit
+
+### WeChat iLink Bot API
+
+This project communicates with WeChat via the official ClawBot iLink protocol (same as [`@tencent-weixin/openclaw-weixin`](https://www.npmjs.com/package/@tencent-weixin/openclaw-weixin)).
+
+**Base URL:** `https://ilinkai.weixin.qq.com`
+
+**Common Headers:**
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <bot_token>` |
+| `AuthorizationType` | `ilink_bot_token` |
+| `X-WECHAT-UIN` | Random base64-encoded value (anti-replay) |
+
+**Endpoints:**
+
+| Endpoint | Description |
+|---|---|
+| `ilink/bot/get_bot_qrcode` | Get login QR code |
+| `ilink/bot/get_qrcode_status` | Poll QR code scan status |
+| `ilink/bot/getupdates` | Long-poll for incoming messages |
+| `ilink/bot/sendmessage` | Send a message |
+
+**sendmessage Request Body:**
+
+```json
+{
+  "msg": {
+    "to_user_id": "xxx@im.wechat",
+    "message_type": 2,
+    "message_state": 2,
+    "context_token": "<from inbound message>",
+    "item_list": [
+      { "type": 1, "text_item": { "text": "Hello" } }
+    ]
+  },
+  "base_info": { "channel_version": "0.1.0" }
+}
+```
+
+**Message Content Types (`item_list[].type`):**
+
+| type | Description |
+|---|---|
+| 1 | Text |
+| 2 | Image |
+| 3 | Voice |
+| 4 | File |
+| 5 | Video |
 
 ### License
 
