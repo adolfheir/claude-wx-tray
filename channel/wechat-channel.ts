@@ -28,6 +28,7 @@ import {
 const CHANNEL_NAME = "wechat";
 const CHANNEL_VERSION = "0.1.0";
 const DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com";
+const CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c";
 const BOT_TYPE = "3";
 const CREDENTIALS_DIR = path.join(
   process.env.HOME || "~",
@@ -296,8 +297,12 @@ interface GetUpdatesResp {
 // Message type constants
 const MSG_TYPE_USER = 1;
 const MSG_ITEM_TEXT = 1;
+const MSG_ITEM_IMAGE = 2;
 const MSG_ITEM_VOICE = 3;
+const MSG_ITEM_FILE = 4;
+const MSG_ITEM_VIDEO = 5;
 const MSG_TYPE_BOT = 2;
+const MSG_STATE_STREAMING = 1;
 const MSG_STATE_FINISH = 2;
 
 function extractTextFromMessage(msg: WeixinMessage): string {
@@ -312,9 +317,12 @@ function extractTextFromMessage(msg: WeixinMessage): string {
       if (!parts.length) return text;
       return `[引用: ${parts.join(" | ")}]\n${text}`;
     }
+    if (item.type === MSG_ITEM_IMAGE) return "[图片]";
     if (item.type === MSG_ITEM_VOICE && item.voice_item?.text) {
       return item.voice_item.text;
     }
+    if (item.type === MSG_ITEM_FILE) return "[文件]";
+    if (item.type === MSG_ITEM_VIDEO) return "[视频]";
   }
   return "";
 }
@@ -391,6 +399,169 @@ async function sendTextMessage(
   return clientId;
 }
 
+// ── Image Upload & Send ──────────────────────────────────────────────────────
+
+function aesEcbPaddedSize(plaintextSize: number): number {
+  return Math.ceil((plaintextSize + 1) / 16) * 16;
+}
+
+function encryptAesEcb(plaintext: Buffer, key: Buffer): Buffer {
+  const cipher = crypto.createCipheriv("aes-128-ecb", key, null);
+  return Buffer.concat([cipher.update(plaintext), cipher.final()]);
+}
+
+interface UploadUrlResponse {
+  upload_param?: string;
+  [key: string]: unknown;
+}
+
+async function getUploadUrl(
+  baseUrl: string,
+  token: string,
+  params: {
+    filekey: string;
+    mediaType: number;
+    toUserId: string;
+    rawsize: number;
+    rawfilemd5: string;
+    filesize: number;
+    aeskey: string;
+  },
+): Promise<UploadUrlResponse> {
+  const raw = await apiFetch({
+    baseUrl,
+    endpoint: "ilink/bot/getuploadurl",
+    body: JSON.stringify({
+      filekey: params.filekey,
+      media_type: params.mediaType,
+      to_user_id: params.toUserId,
+      rawsize: params.rawsize,
+      rawfilemd5: params.rawfilemd5,
+      filesize: params.filesize,
+      no_need_thumb: true,
+      aeskey: params.aeskey,
+    }),
+    token,
+    timeoutMs: 15_000,
+  });
+  return JSON.parse(raw) as UploadUrlResponse;
+}
+
+async function uploadBufferToCdn(params: {
+  buf: Buffer;
+  uploadParam: string;
+  filekey: string;
+  aeskey: Buffer;
+}): Promise<string> {
+  const encrypted = encryptAesEcb(params.buf, params.aeskey);
+  const uploadUrl = `${CDN_BASE_URL}/upload?encrypted_query_param=${encodeURIComponent(params.uploadParam)}&filekey=${encodeURIComponent(params.filekey)}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const res = await fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Length": String(encrypted.length),
+      },
+      body: new Uint8Array(encrypted),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      const errMsg = res.headers.get("x-error-message") || (await res.text());
+      throw new Error(`CDN upload failed: ${res.status} ${errMsg}`);
+    }
+
+    const downloadParam = res.headers.get("x-encrypted-param");
+    if (!downloadParam) {
+      throw new Error("CDN response missing x-encrypted-param header");
+    }
+    return downloadParam;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
+async function sendImageMessage(
+  baseUrl: string,
+  token: string,
+  to: string,
+  imagePath: string,
+  contextToken: string,
+): Promise<string> {
+  const imageBuffer = fs.readFileSync(imagePath);
+  const rawsize = imageBuffer.length;
+  const rawfilemd5 = crypto.createHash("md5").update(imageBuffer).digest("hex");
+  const filesize = aesEcbPaddedSize(rawsize);
+
+  const filekey = crypto.randomBytes(16).toString("hex");
+  const aeskey = crypto.randomBytes(16);
+
+  log(`上传图片: ${imagePath} (${rawsize} bytes)`);
+
+  const uploadResp = await getUploadUrl(baseUrl, token, {
+    filekey,
+    mediaType: 1, // IMAGE
+    toUserId: to,
+    rawsize,
+    rawfilemd5,
+    filesize,
+    aeskey: aeskey.toString("hex"),
+  });
+
+  if (!uploadResp.upload_param) {
+    throw new Error("getuploadurl response missing upload_param");
+  }
+
+  const downloadParam = await uploadBufferToCdn({
+    buf: imageBuffer,
+    uploadParam: uploadResp.upload_param,
+    filekey,
+    aeskey,
+  });
+
+  const aesKeyBase64 = Buffer.from(aeskey.toString("hex")).toString("base64");
+  const clientId = generateClientId();
+
+  await apiFetch({
+    baseUrl,
+    endpoint: "ilink/bot/sendmessage",
+    body: JSON.stringify({
+      msg: {
+        from_user_id: "",
+        to_user_id: to,
+        client_id: clientId,
+        message_type: MSG_TYPE_BOT,
+        message_state: MSG_STATE_FINISH,
+        context_token: contextToken,
+        item_list: [
+          {
+            type: MSG_ITEM_IMAGE,
+            image_item: {
+              media: {
+                encrypt_query_param: downloadParam,
+                aes_key: aesKeyBase64,
+                encrypt_type: 1,
+              },
+              mid_size: filesize,
+            },
+          },
+        ],
+      },
+      base_info: { channel_version: CHANNEL_VERSION },
+    }),
+    token,
+    timeoutMs: 15_000,
+  });
+
+  log(`图片发送成功: ${imagePath}`);
+  return clientId;
+}
+
 // ── MCP Channel Server ──────────────────────────────────────────────────────
 
 const mcp = new Server(
@@ -402,16 +573,20 @@ const mcp = new Server(
     },
     instructions: [
       `Messages from WeChat users arrive as <channel source="wechat" sender="..." sender_id="...">`,
-      "Reply using the wechat_reply tool. You MUST pass the sender_id from the inbound tag.",
+      "Reply using the wechat_reply tool for text, or wechat_send_image for images. You MUST pass the sender_id from the inbound tag.",
+      "To send an image, first save it to a local file, then use wechat_send_image with the absolute file path.",
       "Messages are from real WeChat users via the WeChat ClawBot interface.",
       "Respond naturally in Chinese unless the user writes in another language.",
       "Keep replies concise — WeChat is a chat app, not an essay platform.",
       "Strip markdown formatting (WeChat doesn't render it). Use plain text.",
+      "IMPORTANT: For tasks that take more than a few seconds, send intermediate progress updates to the user via wechat_reply.",
+      "For example: '正在分析代码...' → (do work) → '已完成分析，正在生成修改...' → (do work) → final reply.",
+      "This keeps the WeChat user informed that you are working on their request.",
     ].join("\n"),
   },
 );
 
-// Tool: reply to WeChat
+// Tools: reply to WeChat
 mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
@@ -433,41 +608,82 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["sender_id", "text"],
       },
     },
+    {
+      name: "wechat_send_image",
+      description:
+        "Send an image to the WeChat user. The image must be a local file path (jpg/png/gif/webp/bmp).",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          sender_id: {
+            type: "string",
+            description:
+              "The sender_id from the inbound <channel> tag (xxx@im.wechat format)",
+          },
+          image_path: {
+            type: "string",
+            description:
+              "Absolute path to the image file on disk",
+          },
+        },
+        required: ["sender_id", "image_path"],
+      },
+    },
   ],
 }));
 
 let activeAccount: AccountData | null = null;
 
 mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
-  if (req.params.name === "wechat_reply") {
-    const { sender_id, text } = req.params.arguments as {
-      sender_id: string;
-      text: string;
-    };
+  const toolName = req.params.name;
+
+  if (toolName === "wechat_reply" || toolName === "wechat_send_image") {
     if (!activeAccount) {
       return {
         content: [{ type: "text" as const, text: "error: not logged in" }],
       };
     }
-    const contextToken = getCachedContextToken(sender_id);
+
+    const args = req.params.arguments as Record<string, string>;
+    const senderId = args.sender_id;
+    const contextToken = getCachedContextToken(senderId);
     if (!contextToken) {
       return {
         content: [
           {
             type: "text" as const,
-            text: `error: no context_token for ${sender_id}. The user may need to send a message first.`,
+            text: `error: no context_token for ${senderId}. The user may need to send a message first.`,
           },
         ],
       };
     }
+
     try {
-      await sendTextMessage(
-        activeAccount.baseUrl,
-        activeAccount.token,
-        sender_id,
-        text,
-        contextToken,
-      );
+      if (toolName === "wechat_reply") {
+        await sendTextMessage(
+          activeAccount.baseUrl,
+          activeAccount.token,
+          senderId,
+          args.text,
+          contextToken,
+        );
+      } else {
+        const imagePath = args.image_path;
+        if (!fs.existsSync(imagePath)) {
+          return {
+            content: [
+              { type: "text" as const, text: `error: file not found: ${imagePath}` },
+            ],
+          };
+        }
+        await sendImageMessage(
+          activeAccount.baseUrl,
+          activeAccount.token,
+          senderId,
+          imagePath,
+          contextToken,
+        );
+      }
       return { content: [{ type: "text" as const, text: "sent" }] };
     } catch (err) {
       return {
@@ -477,7 +693,8 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       };
     }
   }
-  throw new Error(`unknown tool: ${req.params.name}`);
+
+  throw new Error(`unknown tool: ${toolName}`);
 });
 
 // ── Long-poll loop ──────────────────────────────────────────────────────────
