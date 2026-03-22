@@ -1,5 +1,5 @@
 {
-  "name": "claude-wx-relay",
+  "name": "claude-wx-tray",
   "version": "0.1.0",
   "private": true,
   "scripts": {

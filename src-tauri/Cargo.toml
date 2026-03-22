@@ -1,14 +1,14 @@
 [package]
-name = "claude-wx-relay"
+name = "claude-wx-tray"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "claude_wx_relay_lib"
+name = "claude_wx_tray_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "claude-wx-relay"
+name = "claude-wx-tray"
 path = "src/main.rs"
 
 [dependencies]

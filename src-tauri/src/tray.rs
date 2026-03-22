@@ -62,7 +62,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     let _tray = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .menu(&menu)
-        .tooltip("ClaudeWXRelay")
+        .tooltip("ClaudeWXTray")
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| {
             let id = event.id().as_ref();
@@ -126,7 +126,7 @@ pub fn update_tray_status(app: &AppHandle, status: &AppStatus) {
 
     // Update tooltip
     let tooltip = format!(
-        "ClaudeWXRelay - Claude: {} | 微信: {}",
+        "ClaudeWXTray - Claude: {} | 微信: {}",
         status_text_short(status.claude),
         status_text_short(status.wechat)
     );

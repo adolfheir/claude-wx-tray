@@ -327,7 +327,7 @@ fn send_notification(app_handle: &AppHandle, title: &str, body: &str) {
     let _ = app_handle
         .notification()
         .builder()
-        .title(format!("ClaudeWXRelay - {}", title))
+        .title(format!("ClaudeWXTray - {}", title))
         .body(body)
         .show();
 }
