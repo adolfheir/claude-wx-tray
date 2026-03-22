@@ -12,7 +12,7 @@ pub enum ConnectionStatus {
     Disconnected,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppStatus {
     pub claude: ConnectionStatus,
     pub wechat: ConnectionStatus,
