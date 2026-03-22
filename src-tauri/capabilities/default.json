@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegoodthings/nicegoodthings.github.io/main/tauri-v2-cap.schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for the app",
+  "windows": ["*"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "notification:default"
+  ]
+}

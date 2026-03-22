@@ -1,0 +1,52 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+}
+
+/* Ensure xterm fills its container */
+.xterm {
+  height: 100%;
+  padding: 4px 0 0 4px;
+}
+
+.xterm-viewport {
+  overflow-y: auto !important;
+}
+
+/* Status bar button hover style */
+button:hover {
+  background-color: #444 !important;
+  border-color: #777 !important;
+}
+
+button:active {
+  background-color: #555 !important;
+}
+
+/* Scrollbar styles for terminal */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

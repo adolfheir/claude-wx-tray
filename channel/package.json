@@ -1,0 +1,13 @@
+{
+  "name": "claude-code-wechat-channel",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun wechat-channel.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

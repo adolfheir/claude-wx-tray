@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Tauri
+src-tauri/target/
+
+# Misc
+.DS_Store
+*.pem
+.env*.local
