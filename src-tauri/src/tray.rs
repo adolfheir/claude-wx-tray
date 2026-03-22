@@ -228,9 +228,10 @@ fn generate_icon(color: TrayColor) -> Image<'static> {
     let bubble_base: (u8, u8, u8) = (0x44, 0x4C, 0x5C);
     let bubble_shadow: (u8, u8, u8) = (0x2C, 0x32, 0x3E);
 
-    // Status dot color
+    // Status dot: only shown for Yellow/Red; Green means all good, no dot needed.
+    let show_dot = !matches!(color, TrayColor::Green);
     let dot_color: (u8, u8, u8) = match color {
-        TrayColor::Green => (0x34, 0xC7, 0x59),
+        TrayColor::Green => (0, 0, 0), // unused
         TrayColor::Yellow => (0xFF, 0xCC, 0x00),
         TrayColor::Red => (0xEF, 0x5B, 0x50),
     };
@@ -298,24 +299,28 @@ fn generate_icon(color: TrayColor) -> Image<'static> {
                 rgba[idx + 3] = (bubble_a * 255.0) as u8;
             }
 
-            // --- Layer 1: status dot (composited on top) ---
-            let dx = px - dot_cx;
-            let dy = py - dot_cy;
-            let d_dot = (dx * dx + dy * dy).sqrt() - dot_r;
-            let dot_a = (0.5 - d_dot).clamp(0.0, 1.0);
+            // --- Layer 1: status dot (only for Yellow/Red) ---
+            if show_dot {
+                let dx = px - dot_cx;
+                let dy = py - dot_cy;
+                let d_dot = (dx * dx + dy * dy).sqrt() - dot_r;
+                let dot_a = (0.5 - d_dot).clamp(0.0, 1.0);
 
-            if dot_a > 0.0 {
-                let bg_a = rgba[idx + 3] as f64 / 255.0;
-                let out_a = dot_a + bg_a * (1.0 - dot_a);
-                if out_a > 0.0 {
-                    let inv = bg_a * (1.0 - dot_a);
-                    rgba[idx] =
-                        ((dot_color.0 as f64 * dot_a + rgba[idx] as f64 * inv) / out_a) as u8;
-                    rgba[idx + 1] =
-                        ((dot_color.1 as f64 * dot_a + rgba[idx + 1] as f64 * inv) / out_a) as u8;
-                    rgba[idx + 2] =
-                        ((dot_color.2 as f64 * dot_a + rgba[idx + 2] as f64 * inv) / out_a) as u8;
-                    rgba[idx + 3] = (out_a * 255.0) as u8;
+                if dot_a > 0.0 {
+                    let bg_a = rgba[idx + 3] as f64 / 255.0;
+                    let out_a = dot_a + bg_a * (1.0 - dot_a);
+                    if out_a > 0.0 {
+                        let inv = bg_a * (1.0 - dot_a);
+                        rgba[idx] =
+                            ((dot_color.0 as f64 * dot_a + rgba[idx] as f64 * inv) / out_a) as u8;
+                        rgba[idx + 1] =
+                            ((dot_color.1 as f64 * dot_a + rgba[idx + 1] as f64 * inv) / out_a)
+                                as u8;
+                        rgba[idx + 2] =
+                            ((dot_color.2 as f64 * dot_a + rgba[idx + 2] as f64 * inv) / out_a)
+                                as u8;
+                        rgba[idx + 3] = (out_a * 255.0) as u8;
+                    }
                 }
             }
         }
