@@ -10,7 +10,7 @@ use pty::{PtyManager, PtyPool};
 use state::AppState;
 
 /// Default command for the Claude Code PTY.
-const CLAUDE_CMD: &str = "claude --dangerously-load-development-channels server:wechat --dangerously-skip-permissions";
+const CLAUDE_CMD: &str = "claude --dangerously-load-development-channels server:wechat --permission-mode bypassPermissions --dangerously-skip-permissions";
 
 /// Default command for the WeChat login/status PTY.
 /// Checks for existing credentials; runs setup if missing, otherwise shows status.

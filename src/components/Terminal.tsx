@@ -10,12 +10,12 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
-  { name: "wechat", label: "微信登录" },
   { name: "claude", label: "Claude Code" },
+  { name: "wechat", label: "微信登录" },
 ];
 
 export default function TerminalComponent() {
-  const [activeTab, setActiveTab] = useState<PtyName>("wechat");
+  const [activeTab, setActiveTab] = useState<PtyName>("claude");
   const initialized = useRef(false);
 
   // Refs for each tab's terminal and container
