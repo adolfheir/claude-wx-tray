@@ -168,12 +168,22 @@ impl PtyManager {
             }
         };
 
-        // Use the user's default shell. On macOS, apps launched from Finder
-        // may not inherit SHELL, so fall back to /bin/zsh (macOS default since Catalina).
+        // Use the user's default shell (non-login) but ensure PATH includes
+        // standard directories. GUI-launched apps have a minimal PATH, so we
+        // prepend the output of macOS path_helper + common tool locations.
+        // We avoid -l (login shell) because it loads .zshrc which may put a
+        // different version of `claude` on PATH.
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
         let mut cmd = CommandBuilder::new(&shell);
         cmd.arg("-c");
         cmd.arg(cmd_string);
+
+        // Build a rich PATH for the child process.
+        let base_path = std::env::var("PATH").unwrap_or_default();
+        let extra = resolve_macos_path();
+        if !extra.is_empty() {
+            cmd.env("PATH", format!("{}:{}", extra, base_path));
+        }
 
         // Set working directory to the channel/ folder so that `claude`
         // picks up the .mcp.json that configures the wechat channel plugin.
@@ -302,6 +312,64 @@ impl PtyManager {
             }
         });
     }
+}
+
+/// Resolve extra PATH entries on macOS so GUI-launched apps can find
+/// user-installed tools (claude, bun, node, etc.).
+///
+/// User-specific directories come FIRST so that ~/.local/bin/claude
+/// takes priority over /opt/homebrew/bin/claude (which may be an older version).
+fn resolve_macos_path() -> String {
+    let mut user_paths: Vec<String> = Vec::new();
+    let mut system_paths: Vec<String> = Vec::new();
+
+    let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
+
+    // 1. User-specific directories first (higher priority).
+    let user_dirs = [
+        format!("{}/.local/bin", home),    // claude, pip, etc.
+        format!("{}/.bun/bin", home),      // bun
+        format!("{}/.cargo/bin", home),    // cargo/rust
+    ];
+    for dir in &user_dirs {
+        if std::path::Path::new(dir).is_dir() {
+            user_paths.push(dir.clone());
+        }
+    }
+
+    // 2. nvm node version.
+    let nvm_dir = format!("{}/.nvm/versions/node", home);
+    if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+        let mut versions: Vec<String> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().map_or(false, |ft| ft.is_dir()))
+            .map(|e| e.path().to_string_lossy().to_string())
+            .collect();
+        versions.sort();
+        if let Some(latest) = versions.last() {
+            let bin = format!("{}/bin", latest);
+            if std::path::Path::new(&bin).is_dir() {
+                user_paths.push(bin);
+            }
+        }
+    }
+
+    // 3. System directories from path_helper (lower priority).
+    if let Ok(output) = std::process::Command::new("/usr/libexec/path_helper")
+        .arg("-s")
+        .output()
+    {
+        let s = String::from_utf8_lossy(&output.stdout);
+        if let Some(start) = s.find('"') {
+            if let Some(end) = s[start + 1..].find('"') {
+                system_paths.push(s[start + 1..start + 1 + end].to_string());
+            }
+        }
+    }
+
+    // user paths first, then system paths
+    user_paths.extend(system_paths);
+    user_paths.join(":")
 }
 
 /// Detect the channel/ directory relative to the current executable.
