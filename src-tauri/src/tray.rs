@@ -27,11 +27,11 @@ const ICON_SIZE: u32 = 32;
 /// - A right-click context menu with status display and action items
 /// - Left-click handler to show/focus the main window
 pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
-    let claude_status = MenuItemBuilder::with_id(MENU_ID_CLAUDE_STATUS, "Claude Code: 未连接")
+    let claude_status = MenuItemBuilder::with_id(MENU_ID_CLAUDE_STATUS, "Claude Code: 已连接")
         .enabled(false)
         .build(app)?;
 
-    let wechat_status = MenuItemBuilder::with_id(MENU_ID_WECHAT_STATUS, "微信: 未连接")
+    let wechat_status = MenuItemBuilder::with_id(MENU_ID_WECHAT_STATUS, "微信: 已连接")
         .enabled(false)
         .build(app)?;
 
@@ -57,7 +57,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
         .item(&quit)
         .build()?;
 
-    let icon = generate_icon(TrayColor::Red);
+    let icon = generate_icon(TrayColor::Green);
 
     let _tray = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)

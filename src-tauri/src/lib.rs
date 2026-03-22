@@ -112,8 +112,6 @@ async fn status_poll_loop(app_handle: AppHandle) {
     };
 
     loop {
-        tokio::time::sleep(STATUS_POLL_INTERVAL).await;
-
         let state = app_handle.state::<AppState>();
         let current = AppStatus {
             claude: if state.pty_pool.is_alive("claude") {
@@ -132,9 +130,11 @@ async fn status_poll_loop(app_handle: AppHandle) {
         tray::update_tray_status(&app_handle, &current);
 
         // Only emit frontend event when status actually changed.
-        if current.claude != prev.claude || current.wechat != prev.wechat {
+        if current != prev {
             let _ = app_handle.emit("status-changed", &current);
             prev = current;
         }
+
+        tokio::time::sleep(STATUS_POLL_INTERVAL).await;
     }
 }
