@@ -14,7 +14,7 @@ const CLAUDE_CMD: &str = "claude --permission-mode bypassPermissions --dangerous
 
 /// Default command for the WeChat login/status PTY.
 /// Checks for existing credentials; runs setup if missing, otherwise shows status.
-const WECHAT_CMD: &str = r#"if [ ! -f ~/.claude/channels/wechat/account.json ]; then echo '未检测到微信凭证，正在启动登录流程...'; echo ''; bun setup.ts; else echo '微信凭证已就绪'; echo ''; echo '账号信息：'; cat ~/.claude/channels/wechat/account.json; echo ''; echo ''; echo '如需重新登录，请删除 ~/.claude/channels/wechat/account.json 后重启应用'; fi; exec bash"#;
+const WECHAT_CMD: &str = r#"if [ ! -f ~/.claude/channels/wechat/account.json ]; then echo '未检测到微信凭证，正在启动登录流程...'; echo ''; bun setup.ts; else echo '微信凭证已就绪'; echo ''; echo '账号信息：'; cat ~/.claude/channels/wechat/account.json; echo ''; echo ''; echo '如需重新登录，请删除 ~/.claude/channels/wechat/account.json 后重启应用'; fi; exec "${SHELL:-/bin/zsh}""#;
 
 /// Default terminal dimensions (cols x rows).
 const DEFAULT_COLS: u16 = 120;

@@ -168,9 +168,9 @@ impl PtyManager {
             }
         };
 
-        // Use the user's default shell (without -l login mode to avoid
-        // PATH conflicts) so that env vars are available.
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+        // Use the user's default shell. On macOS, apps launched from Finder
+        // may not inherit SHELL, so fall back to /bin/zsh (macOS default since Catalina).
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
         let mut cmd = CommandBuilder::new(&shell);
         cmd.arg("-c");
         cmd.arg(cmd_string);
