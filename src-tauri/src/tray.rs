@@ -18,7 +18,7 @@ const MENU_ID_QUIT: &str = "quit";
 const TRAY_ID: &str = "main_tray";
 
 /// Icon size in pixels for the generated tray icons.
-const ICON_SIZE: u32 = 32;
+const ICON_SIZE: u32 = 44;
 
 /// Create the system tray with menu and event handlers.
 ///
@@ -218,109 +218,120 @@ enum TrayColor {
     Red,
 }
 
-/// Generate a chat-bubble shaped RGBA icon at `ICON_SIZE x ICON_SIZE`.
+/// Generate a WeChat-style dual-bubble tray icon at `ICON_SIZE x ICON_SIZE`.
 ///
-/// The bubble has a fixed dark gradient fill. A small colored status dot
-/// in the top-right corner indicates the current connection state.
+/// Two overlapping chat bubbles (like the WeChat logo) rendered as dark
+/// silhouettes suitable for the macOS menu bar. When status is Yellow or Red,
+/// a small colored dot is drawn in the top-right corner.
 fn generate_icon(color: TrayColor) -> Image<'static> {
-    // Fixed bubble gradient: dark blue-grey
-    let bubble_hi: (u8, u8, u8) = (0x6B, 0x72, 0x82);
-    let bubble_base: (u8, u8, u8) = (0x44, 0x4C, 0x5C);
-    let bubble_shadow: (u8, u8, u8) = (0x2C, 0x32, 0x3E);
-
-    // Status dot: only shown for Yellow/Red; Green means all good, no dot needed.
-    let show_dot = !matches!(color, TrayColor::Green);
-    let dot_color: (u8, u8, u8) = match color {
-        TrayColor::Green => (0, 0, 0), // unused
-        TrayColor::Yellow => (0xFF, 0xCC, 0x00),
-        TrayColor::Red => (0xEF, 0x5B, 0x50),
-    };
-
     let size = ICON_SIZE as usize;
     let s = size as f64;
     let mut rgba = vec![0u8; size * size * 4];
 
-    // Chat bubble body (rounded rectangle)
-    let pad = 1.5;
-    let bx0 = pad;
-    let by0 = pad;
-    let bx1 = s - pad;
-    let by1 = s - pad - 7.0;
-    let corner = 6.0;
+    // Bubble fill color — dark for macOS menu bar visibility
+    let fill: (u8, u8, u8) = (0x2C, 0x2C, 0x2E);
 
-    // Tail triangle vertices (bottom-left of bubble)
-    let tail_ax = bx0 + 4.0;
-    let tail_ay = by1;
-    let tail_bx = bx0 + 11.0;
-    let tail_by = by1;
-    let tail_cx = bx0 + 2.0;
-    let tail_cy = s - pad;
+    // ── Large bubble (left) ──
+    // Ellipse center & radii
+    let b1_cx = s * 0.38;
+    let b1_cy = s * 0.44;
+    let b1_rx = s * 0.32;
+    let b1_ry = s * 0.28;
+    // Tail
+    let t1 = [
+        (b1_cx - s * 0.22, b1_cy + b1_ry * 0.7),
+        (b1_cx - s * 0.12, b1_cy + b1_ry * 0.85),
+        (b1_cx - s * 0.28, b1_cy + b1_ry * 1.15),
+    ];
 
-    // Status dot (top-right corner)
-    let dot_r = 4.0_f64;
-    let dot_cx = bx1 - 1.5;
-    let dot_cy = by0 + 1.5;
+    // ── Small bubble (right, overlapping) ──
+    let b2_cx = s * 0.65;
+    let b2_cy = s * 0.54;
+    let b2_rx = s * 0.25;
+    let b2_ry = s * 0.22;
+    // Tail
+    let t2 = [
+        (b2_cx + s * 0.14, b2_cy + b2_ry * 0.7),
+        (b2_cx + s * 0.06, b2_cy + b2_ry * 0.85),
+        (b2_cx + s * 0.20, b2_cy + b2_ry * 1.15),
+    ];
+
+    // ── Eyes (white dots inside bubbles) ──
+    let eye_r = s * 0.04;
+    // Large bubble eyes
+    let e1a = (b1_cx - s * 0.10, b1_cy);
+    let e1b = (b1_cx + s * 0.06, b1_cy);
+    // Small bubble eyes
+    let e2a = (b2_cx - s * 0.08, b2_cy);
+    let e2b = (b2_cx + s * 0.06, b2_cy);
+
+    // ── Status dot (top-right, only for Yellow/Red) ──
+    let show_dot = !matches!(color, TrayColor::Green);
+    let dot_color: (u8, u8, u8) = match color {
+        TrayColor::Green => (0, 0, 0),
+        TrayColor::Yellow => (0xFF, 0xCC, 0x00),
+        TrayColor::Red => (0xEF, 0x5B, 0x50),
+    };
+    let dot_r = s * 0.10;
+    let dot_cx = s * 0.88;
+    let dot_cy = s * 0.12;
 
     for y in 0..size {
         for x in 0..size {
             let px = x as f64 + 0.5;
             let py = y as f64 + 0.5;
-
-            // --- Layer 0: bubble ---
-            let d_body = sdf_rounded_rect(px, py, bx0, by0, bx1, by1, corner);
-            let d_tail = sdf_triangle(
-                px, py, tail_ax, tail_ay, tail_bx, tail_by, tail_cx, tail_cy,
-            );
-            let d_bubble = d_body.min(d_tail);
-            let bubble_a = (0.5 - d_bubble).clamp(0.0, 1.0);
-
             let idx = (y * size + x) * 4;
 
+            // SDF for ellipses: ((x-cx)/rx)^2 + ((y-cy)/ry)^2 - 1
+            let d_b1 = sdf_ellipse(px, py, b1_cx, b1_cy, b1_rx, b1_ry);
+            let d_t1 = sdf_triangle(
+                px, py, t1[0].0, t1[0].1, t1[1].0, t1[1].1, t1[2].0, t1[2].1,
+            );
+            let d_big = d_b1.min(d_t1);
+
+            let d_b2 = sdf_ellipse(px, py, b2_cx, b2_cy, b2_rx, b2_ry);
+            let d_t2 = sdf_triangle(
+                px, py, t2[0].0, t2[0].1, t2[1].0, t2[1].1, t2[2].0, t2[2].1,
+            );
+            let d_small = d_b2.min(d_t2);
+
+            let d_bubble = d_big.min(d_small);
+            let bubble_a = (0.5 - d_bubble).clamp(0.0, 1.0);
+
             if bubble_a > 0.0 {
-                let t = ((py - by0) / (tail_cy - by0)).clamp(0.0, 1.0);
-                let (cr, cg, cb) = if t < 0.35 {
-                    let lt = t / 0.35;
-                    (
-                        lerp_u8(bubble_hi.0, bubble_base.0, lt),
-                        lerp_u8(bubble_hi.1, bubble_base.1, lt),
-                        lerp_u8(bubble_hi.2, bubble_base.2, lt),
-                    )
-                } else {
-                    let lt = (t - 0.35) / 0.65;
-                    (
-                        lerp_u8(bubble_base.0, bubble_shadow.0, lt),
-                        lerp_u8(bubble_base.1, bubble_shadow.1, lt),
-                        lerp_u8(bubble_base.2, bubble_shadow.2, lt),
-                    )
-                };
-                rgba[idx] = cr;
-                rgba[idx + 1] = cg;
-                rgba[idx + 2] = cb;
+                rgba[idx] = fill.0;
+                rgba[idx + 1] = fill.1;
+                rgba[idx + 2] = fill.2;
                 rgba[idx + 3] = (bubble_a * 255.0) as u8;
             }
 
-            // --- Layer 1: status dot (only for Yellow/Red) ---
+            // ── Eyes (white, composited on top of bubbles) ──
+            let eyes = [e1a, e1b, e2a, e2b];
+            for &(ecx, ecy) in &eyes {
+                let dx = px - ecx;
+                let dy = py - ecy;
+                let d_eye = (dx * dx + dy * dy).sqrt() - eye_r;
+                let eye_a = (0.5 - d_eye).clamp(0.0, 1.0);
+                if eye_a > 0.0 {
+                    composite_pixel(&mut rgba, idx, 0xFF, 0xFF, 0xFF, eye_a);
+                }
+            }
+
+            // ── Status dot ──
             if show_dot {
                 let dx = px - dot_cx;
                 let dy = py - dot_cy;
                 let d_dot = (dx * dx + dy * dy).sqrt() - dot_r;
                 let dot_a = (0.5 - d_dot).clamp(0.0, 1.0);
-
                 if dot_a > 0.0 {
-                    let bg_a = rgba[idx + 3] as f64 / 255.0;
-                    let out_a = dot_a + bg_a * (1.0 - dot_a);
-                    if out_a > 0.0 {
-                        let inv = bg_a * (1.0 - dot_a);
-                        rgba[idx] =
-                            ((dot_color.0 as f64 * dot_a + rgba[idx] as f64 * inv) / out_a) as u8;
-                        rgba[idx + 1] =
-                            ((dot_color.1 as f64 * dot_a + rgba[idx + 1] as f64 * inv) / out_a)
-                                as u8;
-                        rgba[idx + 2] =
-                            ((dot_color.2 as f64 * dot_a + rgba[idx + 2] as f64 * inv) / out_a)
-                                as u8;
-                        rgba[idx + 3] = (out_a * 255.0) as u8;
-                    }
+                    composite_pixel(
+                        &mut rgba,
+                        idx,
+                        dot_color.0,
+                        dot_color.1,
+                        dot_color.2,
+                        dot_a,
+                    );
                 }
             }
         }
@@ -329,20 +340,13 @@ fn generate_icon(color: TrayColor) -> Image<'static> {
     Image::new_owned(rgba, ICON_SIZE, ICON_SIZE)
 }
 
-/// Signed distance field for a rounded rectangle.
-fn sdf_rounded_rect(px: f64, py: f64, x0: f64, y0: f64, x1: f64, y1: f64, r: f64) -> f64 {
-    let cx = (x0 + x1) / 2.0;
-    let cy = (y0 + y1) / 2.0;
-    let hw = (x1 - x0) / 2.0;
-    let hh = (y1 - y0) / 2.0;
-
-    let dx = (px - cx).abs() - (hw - r);
-    let dy = (py - cy).abs() - (hh - r);
-
-    let outside = (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt();
-    let inside = dx.max(dy).min(0.0);
-
-    outside + inside - r
+/// Approximate signed distance for an axis-aligned ellipse.
+fn sdf_ellipse(px: f64, py: f64, cx: f64, cy: f64, rx: f64, ry: f64) -> f64 {
+    let nx = (px - cx) / rx;
+    let ny = (py - cy) / ry;
+    let len = (nx * nx + ny * ny).sqrt();
+    // Approximate SDF: scale the unit-circle distance back by the average radius.
+    (len - 1.0) * (rx.min(ry))
 }
 
 /// Signed distance field for a triangle (negative inside, positive outside).
@@ -381,19 +385,25 @@ fn sdf_triangle(
 
     let min_dist = d0.min(d1).min(d2).sqrt();
 
-    // Inside/outside via cross product winding
     let c0 = e0x * v0y - e0y * v0x;
     let c1 = e1x * v1y - e1y * v1x;
     let c2 = e2x * v2y - e2y * v2x;
 
-    let inside = (c0 >= 0.0 && c1 >= 0.0 && c2 >= 0.0)
-        || (c0 <= 0.0 && c1 <= 0.0 && c2 <= 0.0);
+    let inside =
+        (c0 >= 0.0 && c1 >= 0.0 && c2 >= 0.0) || (c0 <= 0.0 && c1 <= 0.0 && c2 <= 0.0);
 
     if inside { -min_dist } else { min_dist }
 }
 
-/// Linearly interpolate between two u8 values.
-fn lerp_u8(a: u8, b: u8, t: f64) -> u8 {
-    let t = t.clamp(0.0, 1.0);
-    (a as f64 * (1.0 - t) + b as f64 * t) as u8
+/// Alpha-composite a foreground color onto an existing pixel in the RGBA buffer.
+fn composite_pixel(rgba: &mut [u8], idx: usize, fr: u8, fg: u8, fb: u8, fa: f64) {
+    let bg_a = rgba[idx + 3] as f64 / 255.0;
+    let out_a = fa + bg_a * (1.0 - fa);
+    if out_a > 0.0 {
+        let inv = bg_a * (1.0 - fa);
+        rgba[idx] = ((fr as f64 * fa + rgba[idx] as f64 * inv) / out_a) as u8;
+        rgba[idx + 1] = ((fg as f64 * fa + rgba[idx + 1] as f64 * inv) / out_a) as u8;
+        rgba[idx + 2] = ((fb as f64 * fa + rgba[idx + 2] as f64 * inv) / out_a) as u8;
+        rgba[idx + 3] = (out_a * 255.0) as u8;
+    }
 }
