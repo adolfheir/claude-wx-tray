@@ -2,6 +2,7 @@ name: Build & Release macOS
 
 on:
   push:
+    branches: [main]
     tags:
       - "v*"
   workflow_dispatch:
@@ -34,7 +35,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build Tauri app
+      # On tag push: build + create GitHub Release with assets
+      - name: Build & Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -45,3 +48,20 @@ jobs:
           releaseBody: "See the assets below to download the installer."
           releaseDraft: false
           prerelease: false
+
+      # On main push: build only, upload artifact
+      - name: Build
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npx tauri
+
+      - name: Upload .dmg artifact
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeWXTray-macos
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
