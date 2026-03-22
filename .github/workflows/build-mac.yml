@@ -1,8 +1,9 @@
-name: Build macOS
+name: Build & Release macOS
 
 on:
   push:
-    branches: [main, master]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -22,6 +23,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -37,10 +40,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: npx tauri
-
-      - name: Upload .dmg artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClaudeWXRelay-macos
-          path: src-tauri/target/release/bundle/dmg/*.dmg
-          if-no-files-found: error
+          tagName: ${{ github.ref_name }}
+          releaseName: "ClaudeWXTray ${{ github.ref_name }}"
+          releaseBody: "See the assets below to download the installer."
+          releaseDraft: false
+          prerelease: false
