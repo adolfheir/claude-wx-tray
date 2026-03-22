@@ -168,11 +168,10 @@ impl PtyManager {
             }
         };
 
-        // Run through the user's default login shell so that PATH and
-        // other env vars (e.g. from ~/.zshrc) are available.
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+        // Use the user's default shell (without -l login mode to avoid
+        // PATH conflicts) so that env vars are available.
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
         let mut cmd = CommandBuilder::new(&shell);
-        cmd.arg("-l");
         cmd.arg("-c");
         cmd.arg(cmd_string);
 
